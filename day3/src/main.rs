@@ -11,14 +11,15 @@ fn main() {
 
     let pt1_answer = lines
         .iter()
-        .map(|contents| find_dupes(contents).unwrap().get_priority())
+        .map(|contents| find_dupes(contents).unwrap().get_priority().unwrap())
         .sum::<i64>();
 
     let mut pt2_answer: i64 = 0;
     for i in 0..(lines.len() / 3) {
         pt2_answer += find_dupes_among_three(&lines[i * 3], &lines[i * 3 + 1], &lines[i * 3 + 2])
             .unwrap()
-            .get_priority();
+            .get_priority()
+            .unwrap();
     }
 
     println!("{}, {}", pt1_answer, pt2_answer);
@@ -94,16 +95,15 @@ fn find_dupes_among_three(st: &String, nd: &String, rd: &String) -> Result<char,
 }
 
 trait Prioritisable {
-    fn get_priority(self: Self) -> i64;
+    fn get_priority(self: Self) -> Result<i64, String>;
 }
 
 impl Prioritisable for char {
-    fn get_priority(self) -> i64 {
-        let char_code = self as u8;
-        if char_code < 97 {
-            return (char_code - 65 + 27).into();
-        } else {
-            return (char_code - 97 + 1).into();
+    fn get_priority(self) -> Result<i64, String> {
+        match self {
+            ch if ch.is_ascii_uppercase() => return Ok((ch as u8 - 65 + 27).into()),
+            ch if ch.is_ascii_lowercase() => return Ok((ch as u8 - 97 + 1).into()),
+            ch => return Err(format!("Invalid input: {ch}")),
         }
     }
 }
