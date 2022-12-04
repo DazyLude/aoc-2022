@@ -10,18 +10,12 @@ fn main() {
 
     let completely_overlapped = input
         .iter()
-        .map(|entry| {
-            if is_completely_overlapped(entry) {
-                1
-            } else {
-                0
-            }
-        })
+        .map(|entry| i64::from(is_completely_overlapped(entry)))
         .sum::<i64>();
 
     let somewhat_overlapped = input
         .iter()
-        .map(|entry| if is_not_overlapped(entry) { 0 } else { 1 })
+        .map(|entry| i64::from(is_not_overlapped(entry)))
         .sum::<i64>();
 
     println!(
@@ -36,6 +30,7 @@ fn read_input_file() -> Vec<[u8; 4]> {
 
     for wrapped_line in input_buf_read.lines() {
         let line = wrapped_line.unwrap();
+
         let l_dash = line.find('-').unwrap();
         let comma = line.find(',').unwrap();
         let r_dash = line.rfind('-').unwrap();
@@ -51,7 +46,7 @@ fn read_input_file() -> Vec<[u8; 4]> {
         );
     }
 
-    return output_vector;
+    output_vector
 }
 
 fn is_completely_overlapped(entry: &[u8; 4]) -> bool {
