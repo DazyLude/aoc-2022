@@ -1,219 +1,231 @@
-// #![allow(dead_code, unused_variables)]
-
 use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
+use std::io::{BufRead, BufReader};
 
 fn main() {
-    let mut tree_grid = Grid::<u8>::new();
+    let mut tree_grid = Vec::<Vec<i8>>::new();
     read_input_to_grid(&mut tree_grid);
+    let mut nav = GridNavigator::new(&tree_grid);
+    let pt1: i64 = calc_seen_from_outside(&mut nav);
 
-    let normal_grid =
-        GridNavigator::<u8>::for_grid_in_direction(&mut tree_grid, Direction::LeftToRight)
-            .make_visibility_mask();
+    let pt2 = get_max_score(&mut nav);
 
-    let right_to_left_grid =
-        GridNavigator::<u8>::for_grid_in_direction(&mut tree_grid, Direction::RightToLeft)
-            .make_visibility_mask();
-
-    let top_to_bottom_grid =
-        GridNavigator::<u8>::for_grid_in_direction(&mut tree_grid, Direction::TopToBottom)
-            .make_visibility_mask();
-
-    let bottom_to_top_grid =
-        GridNavigator::<u8>::for_grid_in_direction(&mut tree_grid, Direction::BottomToTop)
-            .make_visibility_mask();
-
-    // println!("{:?}", normal_grid);
-    // println!("{:?}", right_to_left_grid);
-    // println!("{:?}", top_to_bottom_grid);
-    // println!("{:?}", bottom_to_top_grid);
-
-    let pt1 = (normal_grid + right_to_left_grid + top_to_bottom_grid + bottom_to_top_grid)
-        .grid
-        .iter()
-        .map(|&is_visible| i32::from(is_visible))
-        .sum::<i32>();
-
-    println!("{pt1} trees are visible");
+    println!("pt1: {pt1}; pt2: {pt2}");
 }
 
-fn read_input_to_grid(grid: &mut Grid<u8>) {
+fn read_input_to_grid(grid: &mut Vec<Vec<i8>>) {
     let input_file = File::open("input").expect("Could not open input file");
-    let mut input_buf_read = BufReader::new(input_file).lines();
+    let input_buf_read = BufReader::new(input_file);
 
-    let mut width: usize = 0;
-
-    input_buf_read
-        .next()
-        .unwrap()
-        .unwrap()
-        .chars()
-        .enumerate()
-        .for_each(|(i, tree)| {
-            width = i;
-            grid.grid.push(tree.to_digit(10).unwrap() as u8);
-        });
-
-    input_buf_read.for_each(|wrapped_line| {
-        wrapped_line.unwrap().chars().for_each(|tree| {
-            grid.grid.push(tree.to_digit(10).unwrap() as u8);
-        })
+    input_buf_read.lines().for_each(|wrapped_line| {
+        let row: Vec<i8> = wrapped_line
+            .unwrap()
+            .chars()
+            .map(|char| char.to_digit(10).unwrap() as i8)
+            .collect();
+        grid.push(row);
     });
-
-    grid.set_width(width + 1);
 }
 
-#[derive(Debug, Clone)]
+struct GridNavigator<'a, T> {
+    row: usize,
+    col: usize,
+    grid: &'a Vec<Vec<T>>,
+    out_of_bounds_flag: bool,
+}
+
+enum GoToOption {
+    NextRow,
+    RowEnd,
+    RowBegin,
+    NextCol,
+    ColEnd,
+    ColBegin,
+    Begin,
+}
+
+#[derive(Clone, Copy)]
 enum Direction {
-    LeftToRight,
-    RightToLeft,
-    TopToBottom,
-    BottomToTop,
+    Up,
+    Down,
+    Left,
+    Right,
 }
 
-#[derive(Debug, Clone)]
-struct Grid<T> {
-    pub grid: Vec<T>,
-    width: usize,
-}
-
-impl<T> Grid<T> {
-    fn new() -> Grid<T> {
-        Grid {
-            grid: Vec::<T>::new(),
-            width: 1,
-        }
-    }
-
-    fn set_width(&mut self, new_width: usize) {
-        self.width = new_width;
-    }
-
-    fn get_height(&self) -> usize {
-        self.grid.len() / self.width
-    }
-
-    fn _is_valid(&self) -> bool {
-        self.width * self.get_height() == self.grid.len()
-    }
-}
-
-impl std::ops::Add for Grid<bool> {
-    type Output = Self;
-
-    fn add(self, other: Grid<bool>) -> Self {
-        let mut result = Grid::<bool>::new();
-        result.set_width(self.width);
-
-        for index in 0..self.grid.len() {
-            result.grid.push(self.grid[index] || other.grid[index]);
-        }
-
-        result
-    }
-}
-
-struct GridNavigator<'a, T>
+impl<T> GridNavigator<'_, T>
 where
     T: Copy,
 {
-    nav: &'a mut Grid<T>,
-    direction: Direction,
-    current_item: usize,
-}
-
-impl<T: std::marker::Copy> GridNavigator<'_, T> {
-    fn for_grid_in_direction(grid: &mut Grid<T>, direction: Direction) -> GridNavigator<T> {
+    fn new(grid: &Vec<Vec<T>>) -> GridNavigator<T> {
         GridNavigator {
-            nav: grid,
-            direction,
-            current_item: 0,
+            row: 0,
+            col: 0,
+            grid,
+            out_of_bounds_flag: false,
         }
     }
 
-    fn row(&self) -> usize {
-        self.current_item / self.nav.width
-    }
-
-    fn col(&self) -> usize {
-        self.current_item % self.nav.width
-    }
-
-    fn get_current_index(&self) -> usize {
-        match &self.direction {
-            Direction::LeftToRight => self.current_item,
-            Direction::RightToLeft => self.nav.width - self.col() - 1 + self.row() * self.nav.width,
-            Direction::TopToBottom => self.col() * self.nav.width + self.row(),
-            Direction::BottomToTop => {
-                (self.nav.get_height() - self.col() - 1) * self.nav.width + self.row()
+    fn go_to(&mut self, where_to: GoToOption) {
+        self.out_of_bounds_flag = false;
+        match where_to {
+            GoToOption::RowEnd => self.col = self.grid[0].len() - 1,
+            GoToOption::RowBegin => self.col = 0,
+            GoToOption::NextRow => self.row += 1,
+            GoToOption::NextCol => self.col += 1,
+            GoToOption::ColEnd => self.row = self.grid.len() - 1,
+            GoToOption::ColBegin => self.row = 0,
+            GoToOption::Begin => {
+                self.col = 0;
+                self.row = 0;
             }
+        };
+    }
+
+    fn go(&mut self, direction: Direction) {
+        match direction {
+            Direction::Up if self.row > 0 => self.row -= 1,
+            Direction::Down => self.row += 1,
+            Direction::Left if self.col > 0 => self.col -= 1,
+            Direction::Right => self.col += 1,
+            _ => self.out_of_bounds_flag = true,
         }
     }
 
-    fn get_item(&self) -> Option<T> {
-        if self.current_item >= self.nav.grid.len() {
+    fn get(&mut self) -> Option<T> {
+        if self.out_of_bounds_flag {
             return None;
         }
-        self.nav.grid.get(self.get_current_index()).copied()
+        Some(*self.grid.get(self.row)?.get(self.col)?)
     }
 
-    fn set_item(&mut self, item: T) {
-        let index = self.get_current_index();
-        *self.nav.grid.get_mut(index).unwrap() = item
+    fn set_position(&mut self, new_row: usize, new_col: usize) {
+        self.out_of_bounds_flag = false;
+        self.col = new_col;
+        self.row = new_row;
     }
 
-    fn is_new_big_item(&self) -> bool {
-        match &self.direction {
-            Direction::LeftToRight => self.get_current_index() % self.nav.width == 0,
-            Direction::RightToLeft => {
-                self.get_current_index() % self.nav.width == self.nav.width - 1
+    fn get_position(&self) -> (usize, usize) {
+        (self.row, self.col)
+    }
+}
+
+fn get_max_score(nav: &mut GridNavigator<i8>) -> i64 {
+    let mut max_so_far = 0;
+
+    nav.go_to(GoToOption::Begin);
+    while nav.get().is_some() {
+        while nav.get().is_some() {
+            let new_score = calc_scenic_score(nav);
+            if new_score > max_so_far {
+                max_so_far = new_score;
             }
-            Direction::TopToBottom => self.get_current_index() / self.nav.width == 0,
-            Direction::BottomToTop => {
-                self.get_current_index() / self.nav.width == self.nav.get_height() - 1
+            nav.go(Direction::Right);
+        }
+        nav.go_to(GoToOption::NextRow);
+        nav.go_to(GoToOption::RowBegin);
+    }
+
+    max_so_far
+}
+
+fn calc_scenic_score(nav: &mut GridNavigator<i8>) -> i64 {
+    let mut score = 1;
+    let mut count = 0;
+    let self_height = nav.get().unwrap();
+    let (save_row, save_col) = nav.get_position();
+
+    let mut look_there = |look_where: Direction| {
+        nav.go(look_where);
+        count = 0;
+        while let Some(height) = nav.get() {
+            count += 1;
+            if height >= self_height {
+                break;
             }
+            nav.go(look_where);
+        }
+        score *= count;
+        nav.set_position(save_row, save_col);
+    };
+
+    look_there(Direction::Up);
+    look_there(Direction::Down);
+    look_there(Direction::Left);
+    look_there(Direction::Right);
+
+    score
+}
+
+fn calc_seen_from_outside(nav: &mut GridNavigator<i8>) -> i64 {
+    let mut seen_mask = Vec::<Vec<bool>>::new();
+    for row in 0..nav.grid.len() {
+        seen_mask.push(Vec::<bool>::new());
+        for _ in 0..nav.grid[0].len() {
+            seen_mask[row].push(false);
         }
     }
-}
 
-trait VisibilityMaskable {
-    fn make_visibility_mask(&mut self) -> Grid<bool>;
-}
-
-impl VisibilityMaskable for GridNavigator<'_, u8> {
-    fn make_visibility_mask(&mut self) -> Grid<bool> {
-        let mut visibility_mask = Grid::<bool>::new();
-        self.nav
-            .grid
-            .iter()
-            .for_each(|_| visibility_mask.grid.push(false));
-        visibility_mask.set_width(self.nav.width);
-
-        let mut visibility_mask_navigator =
-            GridNavigator::for_grid_in_direction(&mut visibility_mask, self.direction.clone());
-
-        let mut max_in_big_item = 0;
-
-        while self.current_item < self.nav.grid.len() {
-            if self.is_new_big_item() || self.get_item().unwrap() > max_in_big_item {
-                max_in_big_item = self.get_item().unwrap();
-                visibility_mask_navigator.set_item(true);
+    nav.go_to(GoToOption::Begin);
+    while nav.get().is_some() {
+        let mut last_max = -1;
+        while let Some(value) = nav.get() {
+            if value > last_max {
+                seen_mask[nav.row][nav.col] = true;
+                last_max = value;
             }
-
-            visibility_mask_navigator.current_item += 1;
-            self.current_item += 1;
+            nav.go(Direction::Right);
         }
-
-        visibility_mask
+        nav.go_to(GoToOption::NextRow);
+        nav.go_to(GoToOption::RowBegin);
     }
-}
 
-impl<T: std::marker::Copy> Iterator for GridNavigator<'_, T> {
-    type Item = T;
-    fn next(&mut self) -> Option<T> {
-        let item = self.get_item();
-        self.current_item += 1;
-        item
+    nav.go_to(GoToOption::Begin);
+    nav.go_to(GoToOption::RowEnd);
+    while nav.get().is_some() {
+        let mut last_max = -1;
+        while let Some(value) = nav.get() {
+            if value > last_max {
+                seen_mask[nav.row][nav.col] = true;
+                last_max = value;
+            }
+            nav.go(Direction::Left);
+        }
+        nav.go_to(GoToOption::NextRow);
+        nav.go_to(GoToOption::RowEnd);
     }
+
+    nav.go_to(GoToOption::Begin);
+    while nav.get().is_some() {
+        let mut last_max = -1;
+        while let Some(value) = nav.get() {
+            if value > last_max {
+                seen_mask[nav.row][nav.col] = true;
+                last_max = value;
+            }
+            nav.go(Direction::Down);
+        }
+        nav.go_to(GoToOption::NextCol);
+        nav.go_to(GoToOption::ColBegin);
+    }
+
+    nav.go_to(GoToOption::Begin);
+    nav.go_to(GoToOption::ColEnd);
+    while nav.get().is_some() {
+        let mut last_max = -1;
+        while let Some(value) = nav.get() {
+            if value > last_max {
+                seen_mask[nav.row][nav.col] = true;
+                last_max = value;
+            }
+            nav.go(Direction::Up);
+        }
+        nav.go_to(GoToOption::NextCol);
+        nav.go_to(GoToOption::ColEnd);
+    }
+
+    let count = seen_mask
+        .iter()
+        .map(|row| row.iter().map(|is_seen| *is_seen as i64).sum::<i64>())
+        .sum();
+
+    count
 }

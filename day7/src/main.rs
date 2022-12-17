@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables)]
+// #![allow(dead_code, unused_variables)]
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -11,7 +11,7 @@ fn main() {
     let mut folders: HashMap<String, usize> = HashMap::new();
     read_input_file_to_hashmap(&mut folders);
 
-    let pt1: usize = folders.values().filter(|size| **size < 100000).sum();
+    let pt1: usize = folders.values().filter(|size| size < &&100000usize).sum();
     println!("Pt1: {pt1}");
 
     let disk_size = 70000000;
@@ -21,7 +21,7 @@ fn main() {
 
     let pt2: usize = *folders
         .values()
-        .filter(|size| **size > min_folder_size)
+        .filter(|size| size > &&min_folder_size)
         .min()
         .unwrap();
 
@@ -119,7 +119,7 @@ impl Directory {
     }
 }
 
-// what is this virtual file system? is this about vtubers?
+// what is this virtual file system? is this about these wechuubas again?
 
 // struct VirtualFileSystem {}
 
